@@ -57,6 +57,8 @@ namespace ImageResizer.Plugins.PngOptimizer
 
         protected bool DetermineEnabled(ImageState state)
         {
+            //todo: Determine if image is a png, if not, skip.
+
             if (state.destBitmap == null) return false;
             if (state.settings == null) return false;
 
