@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageResizer.Plugins.PngOptimizer", "ImageResizer.Plugins.PngOptimizer\ImageResizer.Plugins.PngOptimizer.csproj", "{9686024B-9291-4AEB-9B03-BA8B5E8690FE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9686024B-9291-4AEB-9B03-BA8B5E8690FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9686024B-9291-4AEB-9B03-BA8B5E8690FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9686024B-9291-4AEB-9B03-BA8B5E8690FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9686024B-9291-4AEB-9B03-BA8B5E8690FE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
