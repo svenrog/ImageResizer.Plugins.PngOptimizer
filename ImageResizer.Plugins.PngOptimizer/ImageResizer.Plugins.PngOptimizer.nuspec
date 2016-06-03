@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+    <metadata>
+        <id>ImageResizer.Plugins.PngOptimizer</id>
+        <version>1.0.0</version>
+        <title>ImageResizer.Plugins.PngOptimizer</title>
+        <authors>Geta</authors>
+        <owners>Geta</owners>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <description>Implementation of nQuant for png optimization. http://nquant.codeplex.com/</description>
+        <copyright>Copyright © Geta 2015</copyright>
+        <dependencies>
+            <group targetFramework=".NETFramework4.5">
+                <dependency id="ImageResizer" version="3.4.3" />
+            </group>
+        </dependencies>
+    </metadata>
+    <files>
+        <file src="content\web.config.transform" target="content\web.config.transform" />
+        <file src="bin\Release\ImageResizer.Plugins.PngOptimizer.dll" target="lib\net45\ImageResizer.Plugins.PngOptimizer.dll" />
+    </files>
+</package>

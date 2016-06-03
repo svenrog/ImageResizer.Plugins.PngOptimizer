@@ -28,8 +28,7 @@ namespace ImageResizer.Plugins.PngOptimizer
                 "optimized"
             };
         }
-
-
+        
         protected override RequestedAction PostRenderImage(ImageState state)
         {
             var enabled = DetermineEnabled(state);

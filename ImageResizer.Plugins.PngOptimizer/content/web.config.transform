@@ -1,0 +1,7 @@
+<configuration>
+    <resizer>
+        <plugins>
+            <add name="PngOptimizer" />
+        </plugins>
+    </resizer>    
+</configuration>
