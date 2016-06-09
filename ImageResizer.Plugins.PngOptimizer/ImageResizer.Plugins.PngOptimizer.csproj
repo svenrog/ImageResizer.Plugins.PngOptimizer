@@ -42,18 +42,19 @@
     <Reference Include="System.Drawing" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Models\CubeCut.cs" />
+    <Compile Include="Models\DeltaPixel.cs" />
+    <Compile Include="Models\MappedError.cs" />
     <Compile Include="PngOptimizerPlugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Quantization\CubeCut.cs" />
     <Compile Include="Quantization\DitheredLuminanceQuantizer.cs" />
-    <Compile Include="Quantization\MappedPixel.cs" />
-    <Compile Include="Quantization\DeltaPixel.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="content\web.config.transform" />
     <None Include="ImageResizer.Plugins.PngOptimizer.nuspec" />
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

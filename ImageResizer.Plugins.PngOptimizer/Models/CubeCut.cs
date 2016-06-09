@@ -1,4 +1,4 @@
-﻿namespace ImageResizer.Plugins.PngOptimizer.Quantization
+﻿namespace ImageResizer.Plugins.PngOptimizer.Models
 {
     public struct CubeCut
     {

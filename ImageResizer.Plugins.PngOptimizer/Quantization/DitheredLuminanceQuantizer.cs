@@ -1,23 +1,44 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using ImageResizer.Plugins.PngOptimizer.Models;
 using nQuant;
 
 namespace ImageResizer.Plugins.PngOptimizer.Quantization
 {
     public class DitheredLuminanceQuantizer : WuQuantizerBase, IWuQuantizer
     {
-        private const double _luminance_r = 0.299;
-        private const double _luminance_g = 0.587;
-        private const double _luminance_b = 0.114;
+        //Colorspace centric luminance
+        private const double _luminance_a = 0.1;
+        private const double _luminance_r = 0.2126;
+        private const double _luminance_g = 0.7152;
+        private const double _luminance_b = 0.0722;
+
+        //Percieved luminance 
+        //private const double _luminance_r = 3 * 0.299;
+        //private const double _luminance_g = 3 * 0.587;
+        //private const double _luminance_b = 3 * 0.114;
+
+        private readonly byte _ditherThreshold;
 
         private readonly int _width;
         private readonly int _height;
 
-        public DitheredLuminanceQuantizer(int imageWidth, int imageHeight)
+        private readonly int[] _bayer = {
+            0, 32,  8, 40,  2, 34, 10, 42,   /* 8x8 Bayer ordered dithering  */
+            48, 16, 56, 24, 50, 18, 58, 26,  /* pattern.  Each input pixel   */
+            12, 44,  4, 36, 14, 46,  6, 38,  /* is scaled to the 0..63 range */
+            60, 28, 52, 20, 62, 30, 54, 22,  /* before looking in this table */
+            3, 35, 11, 43,  1, 33,  9, 41,   /* to determine the action.     */
+            51, 19, 59, 27, 49, 17, 57, 25,
+            15, 47,  7, 39, 13, 45,  5, 37,
+            63, 31, 55, 23, 61, 29, 53, 21 };
+
+        public DitheredLuminanceQuantizer(int imageWidth, int imageHeight, byte ditherThreshold)
         {
             _width = imageWidth;
             _height = imageHeight;
+            _ditherThreshold = ditherThreshold;
         }
 
         protected override QuantizedPalette GetQuantizedPalette(int colorCount, ColorData data, IEnumerable<Box> cubes, int alphaThreshold)
@@ -45,7 +66,7 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
             IList<Lookup> lookupsList = lookups.Lookups;
             int lookupsCount = lookupsList.Count;
 
-            Dictionary<int, MappedPixel> cachedMaches = new Dictionary<int, MappedPixel>();
+            Dictionary<int, MappedError> cachedMatches = new Dictionary<int, MappedError>();
 
             for (int pixelIndex = 0; pixelIndex < pixelsCount; pixelIndex++)
             {
@@ -55,14 +76,25 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                 if (pixel.Alpha <= alphaThreshold)
                     continue;
 
-                MappedPixel bestMatch;
+                var x = pixelIndex % _width;
+                var y = (pixelIndex - x) / _width;
+
+                //Ordered dither
+                if (pixel.Alpha < _ditherThreshold)
+                {
+                    var orderValue = ((double)_bayer[x % 8 + y % 8 * 8] / 65 - 0.5);
+                    
+                    pixel = new Pixel(Fit(pixel.Alpha + pixel.Alpha * orderValue * 0.1 + orderValue * 16), pixel.Red, pixel.Green, pixel.Blue);
+                }
+
+                MappedError bestMatch;
                 int argb = pixel.Argb;
 
-                if (!cachedMaches.TryGetValue(argb, out bestMatch))
+                if (!cachedMatches.TryGetValue(argb, out bestMatch))
                 {
                     int match = quantizedPixels[pixelIndex];
 
-                    bestMatch = new MappedPixel
+                    bestMatch = new MappedError
                     {
                         Index = match
                     };
@@ -79,26 +111,26 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                         var deltaBlue = pixel.Blue - lookup.Blue;
 
                         // Take luminance into account when calculating distance
-                        int distance =
+                        var distance =
                             (int)
-                                (deltaAlpha * deltaAlpha + 
-                                 deltaRed * deltaRed * _luminance_r * 3 +
-                                 deltaGreen * deltaGreen * _luminance_g * 3 + 
-                                 deltaBlue * deltaBlue * _luminance_b * 3);
+                                ((double)deltaAlpha * deltaAlpha * _luminance_a +
+                                 (double)deltaRed * deltaRed * _luminance_r +
+                                 (double)deltaGreen * deltaGreen * _luminance_g +
+                                 (double)deltaBlue * deltaBlue * _luminance_b);
 
                         if (distance >= bestDistance)
                             continue;
 
                         bestDistance = distance;
 
-                        bestMatch.Error = new DeltaPixel(deltaAlpha, deltaRed, deltaGreen, deltaBlue);
+                        bestMatch.AlphaError = deltaAlpha;
                         bestMatch.Index = lookupIndex;
                     }
 
-                    cachedMaches[argb] = bestMatch;
+                    cachedMatches[argb] = bestMatch;
                 }
 
-                pixels = ApplyError(bestMatch, pixels);
+                //pixels = ApplyErrorDiffusionDither(x, y, bestMatch, pixels);
 
                 alphas[bestMatch.Index] += pixel.Alpha;
                 reds[bestMatch.Index] += pixel.Red;
@@ -119,8 +151,7 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                     blues[paletteIndex] /= sums[paletteIndex];
                 }
 
-                var color = Color.FromArgb(alphas[paletteIndex], reds[paletteIndex], greens[paletteIndex],
-                    blues[paletteIndex]);
+                var color = Color.FromArgb(alphas[paletteIndex], reds[paletteIndex], greens[paletteIndex], blues[paletteIndex]);
                 palette.Colors.Add(color);
             }
 
@@ -129,47 +160,68 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
             return palette;
         }
 
-        protected virtual IList<Pixel> ApplyError(MappedPixel mapped, IList<Pixel> pixels)
+        #region Error diffusion dithering
+
+        protected virtual IList<Pixel> ApplyErrorDiffusionDither(int x, int y, MappedError mapped, IList<Pixel> pixels)
         {
-            // Apply error to surrounding pixels
-            var x = mapped.Index % _width;
-            var y = (mapped.Index - x) / _width;
+            //False Floyd-Steinberg
+            var twoEightsError = mapped.AlphaError * (2.0 / 8);
+            var threeEightsError = mapped.AlphaError * (3.0 / 8);
 
-            // Sierra-3 dithering
-            var divisor = 1;
+            pixels = ApplyError(x + 1, y, threeEightsError, pixels);
+            pixels = ApplyError(x, y + 1, threeEightsError, pixels);
+            pixels = ApplyError(x + 1, y + 1, twoEightsError, pixels);
 
-            pixels = ApplyErrorAtPosition(x + 1, y    , 5, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x + 2, y    , 3, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x - 2, y + 1, 2, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x - 1, y + 1, 4, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x    , y + 1, 5, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x + 1, y + 1, 4, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x + 2, y + 1, 2, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x - 1, y + 2, 2, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x    , y + 2, 3, divisor, mapped.Error, pixels);
-            pixels = ApplyErrorAtPosition(x + 1, y + 2, 2, divisor, mapped.Error, pixels);
+            // Sierra-3
+            //var divisor = 32;
+            //var fifth = bestMatch.AlphaError * (5.0 / 32);
+            //var third = bestMatch.AlphaError * (3.0 / 32);
+            //var second = bestMatch.AlphaError * (2.0 / 32);
+            //var fourth = bestMatch.AlphaError * (2.0 / 32);
+
+            //pixels = ApplyError(x + 1, y, fifth, pixels);
+            //pixels = ApplyError(x + 2, y, third, pixels);
+            //pixels = ApplyError(x - 2, y + 1, second, pixels);
+            //pixels = ApplyError(x - 1, y + 1, fourth, pixels);
+            //pixels = ApplyError(x, y + 1, fifth, pixels);
+            //pixels = ApplyError(x + 1, y + 1, fourth, pixels);
+            //pixels = ApplyError(x + 2, y + 1, second, pixels);
+            //pixels = ApplyError(x - 1, y + 2, second, pixels);
+            //pixels = ApplyError(x, y + 2, third, pixels);
+            //pixels = ApplyError(x + 1, y + 2, second, pixels);
+
             return pixels;
         }
 
-        protected virtual IList<Pixel> ApplyErrorAtPosition(int x, int y, int numerator, int divisor, DeltaPixel delta, IList<Pixel> pixels)
+        protected virtual IList<Pixel> ApplyError(int x, int y, double error, IList<Pixel> pixels)
         {
+            // Avoid applying dither outside of bounds of image
+            // Index calculation will wrap position around to next row
+
             if (x < 0) return pixels;
             if (x >= _width) return pixels;
             if (y >= _height) return pixels;
             if (y < 0) return pixels;
 
+            // Get the new position inside the array
             var index = x + y * _width;
             var pixel = pixels[index];
-            double factor = (double)numerator / divisor;
 
-            var a = pixel.Alpha + Math.Round(delta.Alpha * factor);
-            var r = pixel.Red + Math.Round(delta.Red * factor);
-            var g = pixel.Green + Math.Round(delta.Green * factor);
-            var b = pixel.Blue + Math.Round(delta.Blue * factor);
+            // If alpha is above the threshold, don't dither
+            if (pixel.Alpha > _ditherThreshold) return pixels;
 
-            pixels[index] = new Pixel((byte)a, (byte)r, (byte)g, (byte)b);
+            pixels[index] = new Pixel(Fit(pixel.Alpha + error), pixel.Red, pixel.Green, pixel.Blue);
 
             return pixels;
         }
+
+        protected virtual byte Fit(double value)
+        {
+            if (value < 1) return 0;
+            if (value > 255) return 255;
+            return (byte)value;
+        }
     }
+
+    #endregion
 }

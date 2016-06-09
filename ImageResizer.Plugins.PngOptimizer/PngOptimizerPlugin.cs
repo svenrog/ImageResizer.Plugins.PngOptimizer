@@ -4,7 +4,6 @@ using System.Drawing;
 using ImageResizer.Configuration;
 using ImageResizer.Plugins.PngOptimizer.Quantization;
 using ImageResizer.Resizing;
-using nQuant;
 
 namespace ImageResizer.Plugins.PngOptimizer
 {
@@ -36,12 +35,11 @@ namespace ImageResizer.Plugins.PngOptimizer
             if (!enabled)
                 return RequestedAction.None;
 
-            // todo: Implement optimized quantizer
             // WuQuantizer leads to unwanted effects
             // Color vibrancy loss in saturated colors (fixed by introducing luminance in palette calculation)
-            // Smooth transparent edges are jarry
+            // Smooth transparent areas are jarry (adjusted by dithering below set threshold on alpha channel only)
 
-            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height);
+            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height, 210);
 
             try
             {
