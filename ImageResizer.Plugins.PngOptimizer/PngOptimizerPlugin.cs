@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using ImageResizer.Configuration;
+using ImageResizer.Plugins.PngOptimizer.Quantization;
 using ImageResizer.Resizing;
 using nQuant;
 
@@ -37,14 +38,14 @@ namespace ImageResizer.Plugins.PngOptimizer
 
             // todo: Implement optimized quantizer
             // WuQuantizer leads to unwanted effects
-            // Color vibrancy loss in saturated colors
+            // Color vibrancy loss in saturated colors (fixed by introducing luminance in palette calculation)
             // Smooth transparent edges are jarry
 
-            var quantizer = new WuQuantizer();
+            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height);
 
             try
             {
-                state.destBitmap = (Bitmap) quantizer.QuantizeImage(state.destBitmap, 3, 3);
+                state.destBitmap = (Bitmap) quantizer.QuantizeImage(state.destBitmap, 1, 1);
             }
             catch (Exception)
             {
