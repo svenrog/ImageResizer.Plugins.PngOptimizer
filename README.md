@@ -2,7 +2,7 @@ ImageResizer.Plugins.PngOptimizer
 ====================================
 PNG Optimizer for ImageResizer.NET
 
-![bike example](https://raw.githubusercontent.com/Svenrog/ImageResizer.Plugins.PngOptimizer/master/content/demo.png)
+![bike example](https://raw.githubusercontent.com/svenrog/ImageResizer.Plugins.PngOptimizer/master/ImageResizer.Plugins.PngOptimizer/content/demo.png)
 
 nQuant based optimizer for reducing png file sizes by palette quantization. 
 Uses a Bayer matrix ordered dithering on alpha channel for smoother shadows.
