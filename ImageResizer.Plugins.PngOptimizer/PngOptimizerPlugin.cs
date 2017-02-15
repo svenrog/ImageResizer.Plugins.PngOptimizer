@@ -25,7 +25,8 @@ namespace ImageResizer.Plugins.PngOptimizer
         {
             return new[]
             {
-                "optimized"
+                "optimized",
+                "debugoptimizer"
             };
         }
         
@@ -39,7 +40,7 @@ namespace ImageResizer.Plugins.PngOptimizer
             // Color vibrancy loss in saturated colors (fixed by introducing luminance in palette calculation)
             // Smooth transparent areas are jarry (adjusted by dithering below set threshold on alpha channel only)
 
-            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height, 210);
+            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height, 210, DetermineDebug(state));
 
             try
             {
@@ -61,6 +62,17 @@ namespace ImageResizer.Plugins.PngOptimizer
             if (state.settings == null) return false;
 
             var setting = state.settings["optimized"];
+
+            if (string.IsNullOrEmpty(setting)) return false;
+            if (setting == "0") return false;
+            if (setting.Equals("false", StringComparison.InvariantCultureIgnoreCase)) return false;
+
+            return true;
+        }
+
+        protected bool DetermineDebug(ImageState state)
+        {
+            var setting = state.settings["debugoptimizer"];
 
             if (string.IsNullOrEmpty(setting)) return false;
             if (setting == "0") return false;
