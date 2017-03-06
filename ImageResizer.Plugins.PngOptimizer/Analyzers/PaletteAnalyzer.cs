@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+﻿using System.Collections.Generic;
+using System.Drawing;
 using System.Drawing.Imaging;
 
 namespace ImageResizer.Plugins.PngOptimizer.Analyzers
@@ -14,10 +15,11 @@ namespace ImageResizer.Plugins.PngOptimizer.Analyzers
 
         private unsafe long GetColorCount(BitmapData bitmap)
         {
-            var colorRef = new bool[256 * 256 * 256];
+            var colorRef = new HashSet<int>();
             long colors = 0;
 
             var bpp = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
+
             var h = bitmap.Height;
             var w = bitmap.Width;
             var s = bitmap.Stride;
@@ -32,11 +34,16 @@ namespace ImageResizer.Plugins.PngOptimizer.Analyzers
                     for (var x = 0; x < w; x++)
                     {
                         var p = x * bpp;
-                        var v = (row[p + 2] << 16) | (row[p + 1] << 8) | (row[p]);
-                        
-                        if (colorRef[v]) continue;
 
-                        colorRef[v] = true;
+                        int v = row[p];
+                        for (var b = 1; b < bpp; b++)
+                        {
+                            v |= row[p + b] << (b * 8);
+                        }
+
+                        if (colorRef.Contains(v)) continue;
+
+                        colorRef.Add(v);
                         colors++;
                     }
                 }
