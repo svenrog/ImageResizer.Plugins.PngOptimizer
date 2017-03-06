@@ -14,15 +14,16 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
         //private const double _luminance_g = 0.7152;
         //private const double _luminance_b = 0.0722;
 
+        private const double _byteInverted = 1.0 / 256.0;
+
         //Percieved luminance 
         private const double _luminance_r = 0.299;
         private const double _luminance_g = 0.587;
         private const double _luminance_b = 0.114;
 
-        private const double _byteInverted = 1.0 / 255.0;
-
         private readonly byte _ditherThreshold;
-        private readonly double _ditherColorThreshold;
+        private readonly byte _ditherAmount;
+        private readonly byte _targetColorCount;
 
         private readonly int _width;
         private readonly int _height;
@@ -40,17 +41,26 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
             15, 47,  7, 39, 13, 45,  5, 37,
             63, 31, 55, 23, 61, 29, 53, 21 };
 
-        public DitheredLuminanceQuantizer(int imageWidth, int imageHeight, byte ditherThreshold, bool debug)
+        private readonly double[] _adjustedBayer = new double[64];
+
+        public DitheredLuminanceQuantizer(int imageWidth, int imageHeight, byte targetColorCount, byte ditherThreshold, byte ditherAmount = 12, bool debug = false)
         {
             _width = imageWidth;
             _height = imageHeight;
             _ditherThreshold = ditherThreshold;
-            _ditherColorThreshold = _ditherThreshold * 0.15;
+            _ditherAmount = ditherAmount;
+            _targetColorCount = targetColorCount;
             _debug = debug;
+
+            for (var i = 0; i < 64; i++)
+                _adjustedBayer[i] = _bayer[i] / 65.0 - 0.5;
         }
 
         protected override QuantizedPalette GetQuantizedPalette(int colorCount, ColorData data, IEnumerable<Box> cubes, int alphaThreshold)
         {
+            if (_targetColorCount > 0)
+                colorCount = _targetColorCount;
+
             int imageSize = data.PixelsCount;
             LookupData lookups = BuildLookups(cubes, data);
 
@@ -87,33 +97,35 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                 var x = pixelIndex % _width;
                 var y = (pixelIndex - x) / _width;
 
-                // Check for semi transparent areas
-                if (pixel.Alpha < _ditherThreshold)
+                if (pixel.Alpha > 1 && _ditherAmount > 0)
                 {
-                    // Calculate bayer dithering
-                    var orderValue = ((double)_bayer[x % 8 + y % 8 * 8] / 65 - 0.5);
-                    
-                    // Apply dithering with a magnitude of 8 to the and 10% of the alpha intensity (harder dither on more opaque areas).
-                    pixel = new Pixel(Fit(pixel.Alpha + pixel.Alpha * orderValue * 0.1 + orderValue * 8), pixel.Red, pixel.Green, pixel.Blue);
-                }
-                else 
-                {
-                    // Check for areas with subtle local color variances
-                    var distance = GetMaxSurroundingColorDistance(x, y, pixels);
-                    if (distance > _ditherColorThreshold * 0.20 && distance < _ditherColorThreshold * 0.8)
-                    {
-                        // calculate bayer dithering with a magnitude of 4.
-                        var orderValue = ((double)_bayer[x % 8 + y % 8 * 8] / 65 - 0.5) * 4;
+                    // Get bayer dithering.
+                    var ov = _adjustedBayer[x % 8 + y % 8 * 8] * _ditherAmount;
 
-                        if (_debug)
+                    // Check for semi transparent areas
+                    if (pixel.Alpha < _ditherThreshold)
+                    {
+                        ov *= 1.5;
+
+                        // Apply dithering with a magnitude of 2 to the alpha
+                        pixel = new Pixel(Fit(pixel.Alpha + ov), pixel.Red, pixel.Green, pixel.Blue);
+                    }
+                    else
+                    {
+                        var l = (pixel.Red * _luminance_r + pixel.Blue * _luminance_b + pixel.Green * _luminance_g) * _byteInverted;
+
+                        if (l > 0.05 && l < 0.95)
                         {
-                            // Draw fuchsia on solid dither area
-                            pixel = new Pixel(255, 255, 0, 128);
-                        }
-                        else
-                        {
-                            // Apply dithering to the local color variance.
-                            pixel = new Pixel(pixel.Alpha, Fit(pixel.Red + orderValue), Fit(pixel.Green + orderValue), Fit(pixel.Blue + orderValue));
+                            if (_debug)
+                            {
+                                // Draw fuchsia on solid dither area
+                                pixel = new Pixel(255, 255, 0, 128);
+                            }
+                            else
+                            {
+                                // Apply dithering to the color layer
+                                pixel = new Pixel(pixel.Alpha, Fit(pixel.Red + ov), Fit(pixel.Green + ov), Fit(pixel.Blue + ov));
+                            }    
                         }
                     }
                 }
@@ -188,54 +200,6 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
 
             return palette;
         }
-
-        protected virtual double GetMaxSurroundingColorDistance(int x, int y, IList<Pixel> pixels, int size = 3)
-        {
-            var dmax = 0.0;
-            var xn = x > size - 1 ? -size : 0;
-            var xm = x < _width - (size - 1) ? size : 0;
-            var yn = y > size - 1 ? -size : 0;
-            var ym = y < _height - (size - 1) ? size : 0;
-
-            // Get original pixel index
-            var o = (x % _width) + y * _width;
-
-            // Calculate current pixel luminance
-            var l = (pixels[o].Red * _luminance_r + pixels[o].Blue * _luminance_b + pixels[o].Green * _luminance_g) * _byteInverted;
-
-            // Don't process really bright areas
-            if (l > 0.95) return 0.0;
-
-            // Don't process really dark areas
-            if (l < 0.05) return 0.0;
-
-            // Otherwise, sweep surrounding pixels
-            for (var xd = xn; xd <= xm; xd++)
-            {
-                for (var yd = yn; yd < ym; yd++)
-                {
-                    if (x == 0 && y == 0) continue;
-
-                    // Reverse calculate pixel index from x and y.
-                    var i = ((x + xd) % _width) + (y + yd) * _width;
-
-                    // Get red distance
-                    var dr = Math.Abs(pixels[i].Red - pixels[o].Red);
-
-                    // Get green
-                    var dg = Math.Abs(pixels[i].Green - pixels[o].Green);
-
-                    // Get blue distance
-                    var db = Math.Abs(pixels[i].Blue - pixels[o].Blue);
-                    
-                    // Get the maximum individual color difference for the surrounding pixels
-                    var d = Math.Max(dr * _luminance_r, Math.Max(db * _luminance_b, dg * _luminance_g)) * pixels[i].Alpha * _byteInverted;
-                    if (d > dmax) dmax = d;
-                }
-            }
-
-            return dmax;
-        }  
 
         protected virtual byte Fit(double value)
         {
