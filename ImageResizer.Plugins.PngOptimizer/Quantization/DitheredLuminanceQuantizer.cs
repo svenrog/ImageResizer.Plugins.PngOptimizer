@@ -10,9 +10,6 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
     {
         //Colorspace centric luminance
         private const double _luminance_a = 0.1;
-        //private const double _luminance_r = 0.2126;
-        //private const double _luminance_g = 0.7152;
-        //private const double _luminance_b = 0.0722;
 
         private const double _byteInverted = 1.0 / 256.0;
 
@@ -26,12 +23,11 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
         private readonly byte _targetColorCount;
 
         private readonly int _width;
-        private readonly int _height;
         private readonly bool _debug;
 
         // Bayer ordered dithering is used because it simply does not appear grainy if images are presented in sequence
 
-        private readonly int[] _bayer = {
+        private readonly int[] _bayerPattern = {
             0, 32,  8, 40,  2, 34, 10, 42,   /* 8x8 Bayer ordered dithering  */
             48, 16, 56, 24, 50, 18, 58, 26,  /* pattern.  Each input pixel   */
             12, 44,  4, 36, 14, 46,  6, 38,  /* is scaled to the 0..63 range */
@@ -41,19 +37,19 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
             15, 47,  7, 39, 13, 45,  5, 37,
             63, 31, 55, 23, 61, 29, 53, 21 };
 
-        private readonly double[] _adjustedBayer = new double[64];
+        private readonly double[] _adjustedPattern = new double[64];
 
-        public DitheredLuminanceQuantizer(int imageWidth, int imageHeight, byte targetColorCount, byte ditherThreshold, byte ditherAmount = 12, bool debug = false)
+        public DitheredLuminanceQuantizer(int width, byte targetColorCount, byte ditherThreshold, byte ditherAmount = 12, bool debug = false)
         {
-            _width = imageWidth;
-            _height = imageHeight;
+            _width = width;
             _ditherThreshold = ditherThreshold;
             _ditherAmount = ditherAmount;
             _targetColorCount = targetColorCount;
+
             _debug = debug;
 
             for (var i = 0; i < 64; i++)
-                _adjustedBayer[i] = _bayer[i] / 65.0 - 0.5;
+                _adjustedPattern[i] = _bayerPattern[i] / 65.0 - 0.5;
         }
 
         protected override QuantizedPalette GetQuantizedPalette(int colorCount, ColorData data, IEnumerable<Box> cubes, int alphaThreshold)
@@ -62,12 +58,15 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                 colorCount = _targetColorCount;
 
             int imageSize = data.PixelsCount;
+
             LookupData lookups = BuildLookups(cubes, data);
 
             IList<int> quantizedPixels = data.QuantizedPixels;
+
             for (var index = 0; index < imageSize; ++index)
             {
                 var indexParts = BitConverter.GetBytes(quantizedPixels[index]);
+
                 quantizedPixels[index] =
                     lookups.Tags[indexParts[Alpha], indexParts[Red], indexParts[Green], indexParts[Blue]];
             }
@@ -77,6 +76,7 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
             var greens = new int[colorCount + 1];
             var blues = new int[colorCount + 1];
             var sums = new int[colorCount + 1];
+
             var palette = new QuantizedPalette(imageSize);
 
             IList<Pixel> pixels = data.Pixels;
@@ -100,7 +100,7 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
                 if (pixel.Alpha > 1 && _ditherAmount > 0)
                 {
                     // Get bayer dithering.
-                    var ov = _adjustedBayer[x % 8 + y % 8 * 8] * _ditherAmount;
+                    var ov = _adjustedPattern[x % 8 + y % 8 * 8] * _ditherAmount;
 
                     // Check for semi transparent areas
                     if (pixel.Alpha < _ditherThreshold)
@@ -203,8 +203,8 @@ namespace ImageResizer.Plugins.PngOptimizer.Quantization
 
         protected virtual byte Fit(double value)
         {
-            if (value < 1) return 0;
-            if (value > 255) return 255;
+            if (value < byte.MinValue) return byte.MinValue;
+            if (value > byte.MaxValue) return byte.MaxValue;
             return (byte)value;
         }
     }

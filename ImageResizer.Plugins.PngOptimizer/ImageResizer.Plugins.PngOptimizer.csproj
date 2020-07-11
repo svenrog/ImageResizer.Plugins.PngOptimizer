@@ -11,6 +11,7 @@
     <AssemblyName>ImageResizer.Plugins.PngOptimizer</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -29,16 +30,14 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="ImageResizer, Version=4.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\ImageResizer.4.0.5\lib\net45\ImageResizer.dll</HintPath>
-      <SpecificVersion>False</SpecificVersion>
-      <Private>True</Private>
+      <HintPath>..\..\ImageResizer.Plugins.AutoCrop\packages\ImageResizer.4.0.5\lib\net45\ImageResizer.dll</HintPath>
     </Reference>
     <Reference Include="nQuant.Core, Version=1.0.3.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\nQuant.1.0.3\Lib\net40\nQuant.Core.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>..\..\ImageResizer.Plugins.AutoCrop\packages\nQuant.1.0.3\lib\net40\nQuant.Core.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Drawing" />
@@ -57,9 +56,7 @@
       <SubType>Designer</SubType>
     </None>
     <None Include="ImageResizer.Plugins.PngOptimizer.nuspec" />
-    <None Include="packages.config">
-      <SubType>Designer</SubType>
-    </None>
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

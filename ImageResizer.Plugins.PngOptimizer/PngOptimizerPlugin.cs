@@ -11,8 +11,9 @@ namespace ImageResizer.Plugins.PngOptimizer
 {
     public class PngOptimizerPlugin : BuilderExtension, IPlugin, IQuerystringPlugin
     {
-        private const int _maxcolors = 5120;
-        private const int _maxdither = 12;
+        private const int _maxColors = 5120;
+        private const int _maxDither = 24;
+        private const int _defaultDither = 6;
         private const byte _ditherThreshold = 210;
 
         public IPlugin Install(Config c)
@@ -31,8 +32,9 @@ namespace ImageResizer.Plugins.PngOptimizer
         {
             return new[]
             {
-                "optimized",
-                "debugoptimizer"
+                "optimizePng",
+                "optimizePngDebug",
+                "dither"
             };
         }
         
@@ -42,18 +44,17 @@ namespace ImageResizer.Plugins.PngOptimizer
             if (!enabled)
                 return RequestedAction.None;
 
-            // WuQuantizer leads to unwanted effects
-            // Color vibrancy loss in saturated colors (fixed by introducing luminance in palette calculation)
-            // Smooth transparent areas are jarry (adjusted by dithering below set threshold on alpha channel only)
-
             long colors = 0;
-            byte ditherAmount = 0;
+            byte dither = GetDitherSetting(state);
+            bool debug = DetermineDebug(state);
+
             var bitmap = state.destBitmap;
 
             try
             {
-                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadWrite, bitmap.PixelFormat);
+                var data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, bitmap.PixelFormat);
                 var analyzer = new PaletteAnalyzer(data);
+
                 bitmap.UnlockBits(data);
                 colors = analyzer.Colors;
             }
@@ -62,32 +63,50 @@ namespace ImageResizer.Plugins.PngOptimizer
                 // ignored
             }
 
-            if (colors > 256)
+            if (colors > byte.MaxValue)
             {
-                ditherAmount = (byte)(_maxdither * (Math.Min(_maxcolors, colors) / _maxcolors));
-                colors = 256;
+                var ditherMax = (byte)(_maxDither * (Math.Min(_maxColors, colors) / _maxColors));
+                dither = Math.Min(ditherMax, dither);
+                colors = byte.MaxValue;
+            }
+            else
+            {
+                dither = 0;
             }
 
-            var quantizer = new DitheredLuminanceQuantizer(state.destBitmap.Width, state.destBitmap.Height, (byte)colors, _ditherThreshold, ditherAmount, DetermineDebug(state));
+            var quantizer = new DitheredLuminanceQuantizer(bitmap.Width, (byte)colors, _ditherThreshold, dither, debug);
 
             try
             {
-                state.destBitmap = (Bitmap) quantizer.QuantizeImage(state.destBitmap, 1, 1);
+                var processedBitmap = (Bitmap)quantizer.QuantizeImage(bitmap, 1, 1);
+                state.destBitmap = processedBitmap;
+                bitmap.Dispose();
             }
             catch (Exception)
             {
-                // ignored
+               
             }
 
             return RequestedAction.None;
         }
 
-        protected bool DetermineEnabled(ImageState state)
+        protected virtual byte GetDitherSetting(ImageState state)
+        {
+            if (state.settings == null) return _defaultDither;
+
+            var setting = state.settings.Get<byte>("dither", _defaultDither);
+
+            if (setting > _maxDither) return _maxDither;
+            
+            return setting;
+        }
+
+        protected virtual bool DetermineEnabled(ImageState state)
         {
             if (state.destBitmap == null) return false;
             if (state.settings == null) return false;
 
-            var setting = state.settings["optimized"];
+            var setting = state.settings["optimizePng"];
 
             if (string.IsNullOrEmpty(setting)) return IsPngFile(state);
             if (setting == "0") return false;
@@ -96,15 +115,18 @@ namespace ImageResizer.Plugins.PngOptimizer
             return true;
         }
 
-        protected bool IsPngFile(ImageState state)
+        protected virtual bool IsPngFile(ImageState state)
         {
             if (state.Job == null) return false;
-            return state.Job.ResultFileExtension.Equals("png", StringComparison.InvariantCultureIgnoreCase);
+
+            var extension = state.Job.ResultFileExtension ?? string.Empty;
+
+            return extension.Equals("png", StringComparison.InvariantCultureIgnoreCase);
         }
 
-        protected bool DetermineDebug(ImageState state)
+        protected virtual bool DetermineDebug(ImageState state)
         {
-            var setting = state.settings["debugoptimizer"];
+            var setting = state.settings["optimizePngDebug"];
 
             if (string.IsNullOrEmpty(setting)) return false;
             if (setting == "0") return false;

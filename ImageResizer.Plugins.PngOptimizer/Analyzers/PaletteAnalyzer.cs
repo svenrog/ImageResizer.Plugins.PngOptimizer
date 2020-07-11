@@ -25,27 +25,24 @@ namespace ImageResizer.Plugins.PngOptimizer.Analyzers
             var s = bitmap.Stride;
             var s0 = (byte*)bitmap.Scan0;
 
-            unchecked
+            for (var y = 0; y < h; y++)
             {
-                for (var y = 0; y < h; y++)
+                var row = s0 + y * s;
+
+                for (var x = 0; x < w; x++)
                 {
-                    var row = s0 + y * s;
+                    var p = x * bpp;
 
-                    for (var x = 0; x < w; x++)
+                    int v = row[p];
+                    for (var b = 1; b < bpp; b++)
                     {
-                        var p = x * bpp;
-
-                        int v = row[p];
-                        for (var b = 1; b < bpp; b++)
-                        {
-                            v |= row[p + b] << (b * 8);
-                        }
-
-                        if (colorRef.Contains(v)) continue;
-
-                        colorRef.Add(v);
-                        colors++;
+                        v |= row[p + b] << (b * 8);
                     }
+
+                    if (colorRef.Contains(v)) continue;
+
+                    colorRef.Add(v);
+                    colors++;
                 }
             }
 

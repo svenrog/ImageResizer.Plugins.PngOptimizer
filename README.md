@@ -11,4 +11,5 @@ Error diffusion dithering can sometimes give better results, but give noisy resu
 
 ### Parameters
 
-* **optimize** - values '1' or 'true', specifies if plugin should be used.
+* **optimizePng** - values '1' or 'true', specifies if plugin should be used.
+* **dither** - numeric value '0' to '24' (default 6), how much dithering to apply when reducing colors.
