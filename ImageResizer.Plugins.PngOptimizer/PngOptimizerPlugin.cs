@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using ImageResizer.Configuration;
 using ImageResizer.Plugins.PngOptimizer.Analyzers;
 using ImageResizer.Plugins.PngOptimizer.Quantization;
@@ -103,25 +104,42 @@ namespace ImageResizer.Plugins.PngOptimizer
 
         protected virtual bool DetermineEnabled(ImageState state)
         {
-            if (state.destBitmap == null) return false;
+            if (state == null) return false;
             if (state.settings == null) return false;
+            if (state.destBitmap == null) return false;
 
-            var setting = state.settings["optimizePng"];
+            var setting = state.settings["optimizePng"] ?? string.Empty;
 
-            if (string.IsNullOrEmpty(setting)) return IsPngFile(state);
             if (setting == "0") return false;
             if (setting.Equals("false", StringComparison.InvariantCultureIgnoreCase)) return false;
 
-            return true;
+            return IsPngFile(state);
         }
 
         protected virtual bool IsPngFile(ImageState state)
         {
-            if (state.Job == null) return false;
-
-            var extension = state.Job.ResultFileExtension ?? string.Empty;
+            var extension = state.Job?.ResultFileExtension ??
+                            GetExtension(state.sourceBitmap) ??
+                            string.Empty;
 
             return extension.Equals("png", StringComparison.InvariantCultureIgnoreCase);
+        }
+
+        public string GetExtension(Bitmap source)
+        {
+            if (source == null)
+                return null;
+
+            var tag = source.Tag as BitmapTag;
+            if (tag == null)
+                return null;
+
+            var path = tag.Path;
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            return Path.GetExtension(path)
+                       .TrimStart('.');
         }
 
         protected virtual bool DetermineDebug(ImageState state)
